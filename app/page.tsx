@@ -1,101 +1,187 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState, useEffect, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Moon, Sun, Play } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { CodeEditor } from '@/components/CodeEditor'
+
+const DEFAULT_HTML = '<h1>Hello, Coder!</h1>'
+const DEFAULT_CSS = 'body { font-family: sans-serif; padding: 20px; }'
+const DEFAULT_JS = 'console.log("Hello from JavaScript!");'
+
+export default function CodepenClone() {
+  const [html, setHtml] = useState(DEFAULT_HTML)
+  const [css, setCss] = useState(DEFAULT_CSS)
+  const [js, setJs] = useState(DEFAULT_JS)
+  const [consoleOutput, setConsoleOutput] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [lastExecutedJs, setLastExecutedJs] = useState('')
+  const [userBackground, setUserBackground] = useState('')
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const handleMessage = useCallback((event: MessageEvent) => {
+    if (event.data.type === 'console') {
+      setConsoleOutput(prev => `${prev}${event.data.content}\n`)
+    } else if (event.data.type === 'background') {
+      setUserBackground(event.data.color)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [handleMessage])
+
+  const updateOutput = useCallback((executeJs: boolean = false) => {
+    const combinedCode = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body {
+              margin: 0;
+              background: ${userBackground || (theme === 'dark' ? '#1a1a1a' : '#ffffff')};
+              color: ${theme === 'dark' ? '#ffffff' : '#000000'};
+            }
+            ${css}
+          </style>
+        </head>
+        <body>
+          ${html}
+          <script>
+            (function() {
+              // Set up console interceptor
+              const originalConsole = console.log;
+              console.log = function(...args) {
+                originalConsole.apply(console, args);
+                window.parent.postMessage({
+                  type: 'console',
+                  content: args.join(' ')
+                }, '*');
+              };
+
+              // Create a proxy for style changes
+              const createStyleProxy = (element) => {
+                const originalStyle = element.style;
+                return new Proxy(originalStyle, {
+                  set: function(target, prop, value) {
+                    if (prop === 'background' || prop === 'backgroundColor') {
+                      window.parent.postMessage({
+                        type: 'background',
+                        color: value
+                      }, '*');
+                    }
+                    return Reflect.set(target, prop, value);
+                  }
+                });
+              };
+
+              // Apply the proxy to document.body.style
+              document.body.style = createStyleProxy(document.body);
+
+              // Wait for DOM to be fully loaded
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', runCode);
+              } else {
+                runCode();
+              }
+
+              function runCode() {
+                try {
+                  ${executeJs ? js : ''}
+                } catch (error) {
+                  console.log('Error:', error.message);
+                }
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `
+
+    const iframe = document.createElement('iframe')
+    iframe.srcdoc = combinedCode
+    iframe.style.cssText = 'width: 100%; height: 100%; border: none;'
+
+    const outputContainer = document.getElementById('output-container')
+    if (outputContainer) {
+      outputContainer.innerHTML = ''
+      outputContainer.appendChild(iframe)
+    }
+
+    if (executeJs) {
+      setLastExecutedJs(js)
+    }
+  }, [html, css, js, theme, userBackground])
+
+  // Update output when theme changes, but don't re-execute JS
+  useEffect(() => {
+    if (mounted) {
+      updateOutput(false)
+    }
+  }, [theme, mounted, updateOutput])
+
+  const runCode = useCallback(() => {
+    setConsoleOutput('')
+    setUserBackground('') // Reset user background when running new code
+    updateOutput(true)
+  }, [updateOutput])
+
+  if (!mounted) return null
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Codeditor</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="hover:bg-accent"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            {theme === 'dark' ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <CodeEditor language="html" value={html} onChange={setHtml} />
+          <CodeEditor language="css" value={css} onChange={setCss} />
+          <CodeEditor language="javascript" value={js} onChange={setJs} />
+        </div>
+
+        <div className="flex justify-center pt-4 mb-4">
+          <Button onClick={runCode} className="bg-primary border rounded-lg hover:bg-primary/90">
+            <Play className="mr-2 h-4 w-4" /> Run
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Output</h2>
+            <div className="h-64 border rounded-lg overflow-hidden border-border">
+              <div id="output-container" className="h-full bg-background" />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Console</h2>
+            <pre 
+              className="h-64 p-4 border rounded-lg overflow-auto font-mono text-sm border-border bg-muted"
+            >
+              {consoleOutput}
+            </pre>
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
