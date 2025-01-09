@@ -16,7 +16,6 @@ export default function CodepenClone() {
   const [js, setJs] = useState(DEFAULT_JS)
   const [consoleOutput, setConsoleOutput] = useState('')
   const [mounted, setMounted] = useState(false)
-  const [lastExecutedJs, setLastExecutedJs] = useState('')
   const [userBackground, setUserBackground] = useState('')
   const { theme, setTheme } = useTheme()
 
@@ -112,10 +111,6 @@ export default function CodepenClone() {
     if (outputContainer) {
       outputContainer.innerHTML = ''
       outputContainer.appendChild(iframe)
-    }
-
-    if (executeJs) {
-      setLastExecutedJs(js)
     }
   }, [html, css, js, theme, userBackground])
 
