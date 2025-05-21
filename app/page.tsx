@@ -9,11 +9,19 @@ import { CodeEditor } from '@/components/CodeEditor'
 const DEFAULT_HTML = '<h1>Hello, Coder!</h1>'
 const DEFAULT_CSS = 'body { font-family: sans-serif; padding: 20px; }'
 const DEFAULT_JS = 'console.log("Hello from JavaScript!");'
+const DEFAULT_REACT = `
+const App = () => {
+  return <h1>Hello from React!</h1>;
+};
+
+ReactDOM.render(<App />, document.getElementById('react-root'));
+`;
 
 export default function CodepenClone() {
   const [html, setHtml] = useState(DEFAULT_HTML)
   const [css, setCss] = useState(DEFAULT_CSS)
   const [js, setJs] = useState(DEFAULT_JS)
+  const [react, setReact] = useState(DEFAULT_REACT)
   const [consoleOutput, setConsoleOutput] = useState('')
   const [mounted, setMounted] = useState(false)
   const [userBackground, setUserBackground] = useState('')
@@ -37,6 +45,8 @@ export default function CodepenClone() {
   }, [handleMessage])
 
   const updateOutput = useCallback((executeJs: boolean = false) => {
+    const isReactCodePresent = react.trim() !== '' && react.trim() !== DEFAULT_REACT.trim();
+
     const combinedCode = `
       <!DOCTYPE html>
       <html>
@@ -49,10 +59,14 @@ export default function CodepenClone() {
             }
             ${css}
           </style>
+          <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+          <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+          <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
         </head>
         <body>
           ${html}
-          <script>
+          <div id="react-root"></div>
+          <script type="text/javascript">
             (function() {
               // Set up console interceptor
               const originalConsole = console.log;
@@ -91,13 +105,31 @@ export default function CodepenClone() {
               }
 
               function runCode() {
-                try {
-                  ${executeJs ? js : ''}
-                } catch (error) {
-                  console.log('Error:', error.message);
+                // Execute regular JavaScript code
+                if (executeJs) {
+                  try {
+                    ${js}
+                  } catch (error) {
+                    console.log('JS Error:', error.message);
+                  }
                 }
+                // React code will be transpiled and run by Babel due to the script tag below
+              }
+
+              // Wait for DOM to be fully loaded
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', runCode);
+              } else {
+                runCode();
               }
             })();
+          </script>
+          <script type="text/babel">
+            try {
+              ${isReactCodePresent ? react : `ReactDOM.render(null, document.getElementById('react-root'));`}
+            } catch (error) {
+              console.log('React Error:', error.message);
+            }
           </script>
         </body>
       </html>
@@ -112,7 +144,7 @@ export default function CodepenClone() {
       outputContainer.innerHTML = ''
       outputContainer.appendChild(iframe)
     }
-  }, [html, css, js, theme, userBackground])
+  }, [html, css, js, react, theme, userBackground, DEFAULT_REACT])
 
   // Update output when theme changes, but don't re-execute JS
   useEffect(() => {
@@ -148,10 +180,11 @@ export default function CodepenClone() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <CodeEditor language="html" value={html} onChange={setHtml} />
           <CodeEditor language="css" value={css} onChange={setCss} />
           <CodeEditor language="javascript" value={js} onChange={setJs} />
+          <CodeEditor language="react" value={react} onChange={setReact} />
         </div>
 
         <div className="flex justify-center pt-4 mb-4">

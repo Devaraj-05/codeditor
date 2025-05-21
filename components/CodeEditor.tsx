@@ -5,7 +5,7 @@ import Editor from '@monaco-editor/react';
 import { useTheme } from 'next-themes';
 
 type CodeEditorProps = {
-  language: 'html' | 'css' | 'javascript';
+  language: 'html' | 'css' | 'javascript' | 'react';
   value: string;
   onChange: (value: string) => void;
 };
@@ -14,6 +14,7 @@ const languageIcons = {
   html: FileHtml,
   css: FileCode,
   javascript: FileJson,
+  react: FileJson,
 };
 
 export function CodeEditor({ language, value, onChange }: CodeEditorProps) {
